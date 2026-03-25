@@ -35,3 +35,6 @@ Thumbs.db
 *.pth
 *.h5
 *.ckpt
+
+# Generated analysis output charts (re-created by running the analysis modules)
+analysis/outputs/
