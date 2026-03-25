@@ -24,6 +24,7 @@ matplotlib.use("Agg")           # 无界面环境使用非交互后端
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from sklearn.metrics import mean_absolute_error
+from data.preprocess import align_15min_index
 
 warnings.filterwarnings("ignore")
 
@@ -154,7 +155,6 @@ def load_historical_data() -> pd.DataFrame:
     df = df[df["load_mw"] > 0].copy()
 
     # 补全缺失时段（使用前向填充）：确保15分钟等间隔，让滞后特征定位正确
-    from data.preprocess import align_15min_index
     df = align_15min_index(df, fill_method="ffill")
     # 补全后再次过滤极端异常值（填充可能引入）
     df = df[df["load_mw"] > 0].copy()
@@ -260,8 +260,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     out["is_weekend"] = (idx.dayofweek >= 5).astype(int)
 
     holiday_set = {pd.Timestamp(d).date() for d in ALL_HOLIDAYS}
-    out["is_holiday"] = idx.date
-    out["is_holiday"] = out["is_holiday"].apply(lambda d: int(d in holiday_set))
+    out["is_holiday"] = out.index.to_series().apply(lambda d: int(d.date() in holiday_set))
     out["is_workday"] = ((out["is_weekend"] == 0) & (out["is_holiday"] == 0)).astype(int)
 
     # 峰谷平尖峰标签（2026年3月江西省规则）
@@ -1028,6 +1027,7 @@ def main() -> None:
 
     # ── 步骤8：滚动修正演示 ───────────────────────────────────────────────
     print("\n【步骤9】滚动修正演示（使用3月1日前24个时段真实数据修正后续预测）...")
+    corrected_metrics: Dict = {}   # 修正后指标（若有真实数据则填充）
     # 模拟：取前24个时段（6小时）的真实数据进行修正
     known_slots = 24
     partial_actual = real_load_df.iloc[:known_slots].copy()
@@ -1105,7 +1105,7 @@ def main() -> None:
         print(f"  3月1日预测 MAPE        : {real_metrics.get('MAPE(%)', 'N/A')}%")
         print(f"  3月1日预测 MAE         : {real_metrics.get('MAE(MW)', 'N/A')} MW")
         print(f"  3月1日预测 RMSE        : {real_metrics.get('RMSE(MW)', 'N/A')} MW")
-    if len(common_idx) > 0 and 'corrected_metrics' in dir():
+    if len(common_idx) > 0 and corrected_metrics:
         print(f"  3月1日修正后 MAPE      : {corrected_metrics.get('MAPE(%)', 'N/A')}%")
         print(f"  3月1日修正后 MAE       : {corrected_metrics.get('MAE(MW)', 'N/A')} MW")
     print(f"\n  80% 置信区间平均宽度   : {interval_width.mean():.1f} MW")
